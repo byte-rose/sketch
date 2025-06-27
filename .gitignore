@@ -5,3 +5,4 @@ node_modules
 
 # goreleaser builds
 dist
+interactions.md
