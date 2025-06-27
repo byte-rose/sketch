@@ -281,7 +281,7 @@ func parseCLIFlags() CLIFlags {
 	defaultHelpText := fmt.Sprintf("base Docker image to use (defaults to %s:%s); see https://sketch.dev/docs/docker for instructions", defaultImageName, defaultTag)
 	userFlags.StringVar(&flags.baseImage, "base-image", "", defaultHelpText)
 
-	userFlags.StringVar(&flags.dockerArgs, "docker-args", "", "additional arguments to pass to the docker create command (e.g., --memory=2g --cpus=2)")
+	userFlags.StringVar(&flags.dockerArgs, "docker-args", "--cap-add=NET_ADMIN --cap-add=NET_RAW", "additional arguments to pass to the docker create command (e.g., --memory=2g --cpus=2)")
 	userFlags.Var(&flags.mounts, "mount", "volume to mount in the container in format /path/on/host:/path/in/container (can be repeated)")
 	userFlags.BoolVar(&flags.termUI, "termui", true, "enable terminal UI")
 	userFlags.StringVar(&flags.branchPrefix, "branch-prefix", "sketch/", "prefix for git branches created by sketch")
