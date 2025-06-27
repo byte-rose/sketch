@@ -468,6 +468,7 @@ func waitForProcessDeath(t *testing.T, pid int) {
 func TestPtyDetection(t *testing.T) {
 	// Test if tty command can detect terminal presence
 	// With PTY: tty command should succeed (exit 0)
+	
 	// Without PTY: tty command should fail (exit 1)
 	t.Run("TTY Detection", func(t *testing.T) {
 		input := json.RawMessage(`{"command":"tty"}`)
