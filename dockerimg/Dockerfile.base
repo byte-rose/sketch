@@ -24,13 +24,14 @@ RUN apt-get update; \
 	apt-get install -y --no-install-recommends \
 		ca-certificates wget \
 		git jq sqlite3 npm nodejs gh ripgrep fzf python3 curl vim lsof iproute2 less \
-		docker.io docker-compose-v2 docker-buildx \
+		docker.io docker-compose docker-buildx \
 		make python3-pip python-is-python3 tree net-tools file build-essential \
 		pipx cargo psmisc bsdmainutils openssh-client sudo \
 		unzip yarn util-linux \
 		libglib2.0-0 libnss3 libx11-6 libxcomposite1 libxdamage1 \
 		libxext6 libxi6 libxrandr2 libgbm1 libgtk-3-0 \
 		fonts-noto-color-emoji fonts-symbola \
+		nmap metasploit-framework john hydra sqlmap aircrack-ng \
 		nmap metasploit-framework john hydra sqlmap aircrack-ng && \
 	fc-cache -f -v && \
 	apt-get clean && \
