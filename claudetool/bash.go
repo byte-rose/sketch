@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"os"
@@ -16,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/creack/pty"
 	"sketch.dev/claudetool/bashkit"
 	"sketch.dev/llm"
 	"sketch.dev/llm/conversation"
@@ -171,106 +169,8 @@ func executeBash(ctx context.Context, req bashInput) (string, error) {
 	execCtx, cancel := context.WithTimeout(ctx, req.timeout())
 	defer cancel()
 
-	// Try PTY first for better interactive support, fallback to exec if it fails
-	if output, err := executeBashWithPty(execCtx, req); err == nil {
-		return output, nil
-	} else {
-		// Log PTY failure for debugging but don't fail the command
-		slog.Debug("PTY execution failed, falling back to exec", "error", err)
-	}
-
-	// Fallback to original exec-based implementation
-	return executeBashWithExec(execCtx, req)
-}
-
-// executeBashWithPty attempts to run bash command using pty for interactive support
-func executeBashWithPty(ctx context.Context, req bashInput) (string, error) {
-	// Start bash with a pty for better interactive support
-	cmd := exec.CommandContext(ctx, "bash")
-	cmd.Dir = WorkingDir(ctx)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	// Set environment with SKETCH=1 and TERM for proper pty behavior
-	cmd.Env = append(os.Environ(), "SKETCH=1", "TERM=xterm-256color")
-
-	// Start the command with a pty
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return "", fmt.Errorf("failed to start pty: %w", err)
-	}
-	defer ptmx.Close()
-
-	proc := cmd.Process
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded && proc != nil {
-				// Kill the entire process group.
-				syscall.Kill(-proc.Pid, syscall.SIGKILL)
-			}
-		case <-done:
-		}
-	}()
-
-	// Send the command to the pty followed by exit to ensure bash terminates
-	cmdLine := req.Command + "; exit $?\n"
-	_, err = ptmx.Write([]byte(cmdLine))
-	if err != nil {
-		return "", fmt.Errorf("failed to write command to pty: %w", err)
-	}
-
-	// Read all output from the pty
-	var output bytes.Buffer
-	_, err = io.Copy(&output, ptmx)
-	if err != nil && err != io.EOF {
-		// Don't treat EOF as an error since it's expected when the process exits
-		slog.Debug("pty read error (may be normal)", "error", err)
-	}
-
-	// Wait for command to complete
-	err = cmd.Wait()
-	close(done)
-
-	// Process the output - remove shell prompt and command echo if present
-	outputStr := output.String()
-	outputStr = cleanPtyOutput(outputStr, req.Command)
-
-	longOutput := len(outputStr) > maxBashOutputLength
-	var outstr string
-	if longOutput {
-		outstr = fmt.Sprintf("output too long: got %v, max is %v\ninitial bytes of output:\n%s",
-			humanizeBytes(len(outputStr)), humanizeBytes(maxBashOutputLength),
-			outputStr[:1024],
-		)
-	} else {
-		outstr = outputStr
-	}
-
-	if ctx.Err() == context.DeadlineExceeded {
-		// Get the partial output that was captured before the timeout
-		partialOutput := outputStr
-		// Truncate if the output is too large
-		if len(partialOutput) > maxBashOutputLength {
-			partialOutput = partialOutput[:maxBashOutputLength] + "\n[output truncated due to size]\n"
-		}
-		return "", fmt.Errorf("command timed out after %s\nCommand output (until it timed out):\n%s", req.timeout(), outstr)
-	}
-	if err != nil {
-		return "", fmt.Errorf("command failed: %w\n%s", err, outstr)
-	}
-
-	if longOutput {
-		return "", fmt.Errorf("%s", outstr)
-	}
-
-	return outputStr, nil
-}
-
-// executeBashWithExec runs bash command using the original exec approach
-func executeBashWithExec(ctx context.Context, req bashInput) (string, error) {
 	// Can't do the simple thing and call CombinedOutput because of the need to kill the process group.
-	cmd := exec.CommandContext(ctx, "bash", "-c", req.Command)
+	cmd := exec.CommandContext(execCtx, "bash", "-c", req.Command)
 	cmd.Dir = WorkingDir(ctx)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -288,8 +188,8 @@ func executeBashWithExec(ctx context.Context, req bashInput) (string, error) {
 	done := make(chan struct{})
 	go func() {
 		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded && proc != nil {
+		case <-execCtx.Done():
+			if execCtx.Err() == context.DeadlineExceeded && proc != nil {
 				// Kill the entire process group.
 				syscall.Kill(-proc.Pid, syscall.SIGKILL)
 			}
@@ -311,7 +211,7 @@ func executeBashWithExec(ctx context.Context, req bashInput) (string, error) {
 		outstr = output.String()
 	}
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if execCtx.Err() == context.DeadlineExceeded {
 		// Get the partial output that was captured before the timeout
 		partialOutput := output.String()
 		// Truncate if the output is too large
@@ -347,113 +247,6 @@ func humanizeBytes(bytes int) string {
 
 // executeBackgroundBash executes a command in the background and returns the pid and output file locations
 func executeBackgroundBash(ctx context.Context, req bashInput) (*BackgroundResult, error) {
-	// Try PTY first for better interactive support, fallback to exec if it fails
-	if result, err := executeBackgroundBashWithPty(ctx, req); err == nil {
-		return result, nil
-	} else {
-		// Log PTY failure for debugging but don't fail the command
-		slog.Debug("Background PTY execution failed, falling back to exec", "error", err)
-	}
-
-	// Fallback to original exec-based implementation
-	return executeBackgroundBashWithExec(ctx, req)
-}
-
-// executeBackgroundBashWithPty executes a command in the background using pty
-func executeBackgroundBashWithPty(ctx context.Context, req bashInput) (*BackgroundResult, error) {
-	// Create temporary directory for output files
-	tmpDir, err := os.MkdirTemp("", "sketch-bg-")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	// Create temp files for stdout and stderr (with pty, both go to same output)
-	stdoutFile := filepath.Join(tmpDir, "stdout")
-	stderrFile := filepath.Join(tmpDir, "stderr")
-
-	// Prepare the command
-	cmd := exec.Command("bash")
-	cmd.Dir = WorkingDir(ctx)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	// Set environment with SKETCH=1 and TERM for proper pty behavior
-	cmd.Env = append(os.Environ(), "SKETCH=1", "TERM=xterm-256color")
-
-	// Start the command with a pty
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start background pty: %w", err)
-	}
-
-	// Open output files
-	stdout, err := os.Create(stdoutFile)
-	if err != nil {
-		ptmx.Close()
-		return nil, fmt.Errorf("failed to create stdout file: %w", err)
-	}
-
-	// For background tasks, we create an empty stderr file to maintain API compatibility
-	// but all output (stdout+stderr) goes to stdout file since pty combines them
-	_, err = os.Create(stderrFile)
-	if err != nil {
-		stdout.Close()
-		ptmx.Close()
-		return nil, fmt.Errorf("failed to create stderr file: %w", err)
-	}
-
-	// Send the command to the pty
-	cmdLine := req.Command + "\n"
-	_, err = ptmx.Write([]byte(cmdLine))
-	if err != nil {
-		stdout.Close()
-		ptmx.Close()
-		return nil, fmt.Errorf("failed to write command to background pty: %w", err)
-	}
-
-	// Start a goroutine to copy pty output to the stdout file
-	go func() {
-		defer stdout.Close()
-		defer ptmx.Close()
-
-		// Copy all pty output to stdout file
-		io.Copy(stdout, ptmx)
-
-		// Wait for process to complete (reap the process)
-		cmd.Wait()
-	}()
-
-	// Set up timeout handling if a timeout was specified
-	pid := cmd.Process.Pid
-	timeout := req.timeout()
-	if timeout > 0 {
-		// Launch a goroutine that will kill the process after the timeout
-		go func() {
-			// TODO(josh): this should use a context instead of a sleep, like executeBash above,
-			// to avoid goroutine leaks. Possibly should be partially unified with executeBash.
-			// Sleep for the timeout duration
-			time.Sleep(timeout)
-
-			// TODO(philip): Should we do SIGQUIT and then SIGKILL in 5s?
-
-			// Try to kill the process group
-			killErr := syscall.Kill(-pid, syscall.SIGKILL)
-			if killErr != nil {
-				// If killing the process group fails, try to kill just the process
-				syscall.Kill(pid, syscall.SIGKILL)
-			}
-		}()
-	}
-
-	// Return the process ID and file paths
-	return &BackgroundResult{
-		PID:        cmd.Process.Pid,
-		StdoutFile: stdoutFile,
-		StderrFile: stderrFile,
-	}, nil
-}
-
-// executeBackgroundBashWithExec executes a command in the background using the original exec approach
-func executeBackgroundBashWithExec(ctx context.Context, req bashInput) (*BackgroundResult, error) {
 	// Create temporary directory for output files
 	tmpDir, err := os.MkdirTemp("", "sketch-bg-")
 	if err != nil {
@@ -693,44 +486,4 @@ Once all commands have been processed, call the "done" tool with the status of e
 	}
 
 	return nil
-}
-
-// cleanPtyOutput removes shell prompts and command echoes from pty output
-func cleanPtyOutput(output, command string) string {
-	lines := strings.Split(output, "\n")
-	var cleanLines []string
-
-	skipNext := false
-	for i, line := range lines {
-		if skipNext {
-			skipNext = false
-			continue
-		}
-
-		// Skip common shell prompts (basic heuristic)
-		if strings.HasPrefix(line, "$ ") || strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "> ") {
-			continue
-		}
-
-		// Skip the command echo if it appears at the beginning
-		if i < 3 && strings.Contains(line, command) {
-			continue
-		}
-
-		// Skip exit command echo
-		if strings.Contains(line, "; exit $?") {
-			continue
-		}
-
-		// Skip empty lines at the beginning
-		if len(cleanLines) == 0 && strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		cleanLines = append(cleanLines, line)
-	}
-
-	// Join back and trim trailing whitespace
-	result := strings.Join(cleanLines, "\n")
-	return strings.TrimRight(result, "\n")
 }

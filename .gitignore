@@ -2,4 +2,3 @@ node_modules
 
 # Local environment variables
 .envrc
-interactions.md

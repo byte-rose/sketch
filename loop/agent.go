@@ -570,7 +570,7 @@ Please create a detailed summary that includes:
 
 2. **Work Completed**: What have we accomplished together? Include any code changes, files created/modified, problems solved, etc.
 
-3. **Key Security  FIndings**: What important technical findings were made during our work and why?
+3. **Key Technical Decisions**: What important technical choices were made during our work and why?
 
 4. **Current State**: What is the current state of the project? What files, tools, or systems are we working with?
 
@@ -591,11 +591,11 @@ Reply with ONLY the summary content - no meta-commentary about creating the summ
 
 	// Modify the system prompt to provide context about the original task
 	originalSystemPrompt := convo.SystemPrompt
-	convo.SystemPrompt = `You are creating a conversation summary for context compaction. The original system prompt contained instructions about being a software engineer and architect for Sketch (an agentic coding environment and also a cybersecurity assistant.), with various tools and capabilities for code analysis, file modification, git operations, browser automation, and project management.
+	convo.SystemPrompt = `You are creating a conversation summary for context compaction. The original system prompt contained instructions about being a software engineer and architect for Sketch (an agentic coding environment), with various tools and capabilities for code analysis, file modification, git operations, browser automation, and project management.
 
 Your task is to create a focused summary as requested below. Focus only on the actual user conversation and work accomplished, not the system capabilities or tool descriptions.
 
-Original context: You are working in a coding  environment with full access to development tools to build and iterate on sketch but also a pentesting environment in kali to build, test and extend sketch's capabilities.`
+Original context: You are working in a coding environment with full access to development tools.`
 
 	resp, err := convo.SendMessage(userMessage)
 	if err != nil {
