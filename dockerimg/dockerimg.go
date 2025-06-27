@@ -322,24 +322,25 @@ func LaunchContainer(ctx context.Context, config ContainerConfig) error {
 		return err
 	}
 
-	// Get the sketch server port from the container
-	localAddr, err := getContainerPort(ctx, cntrName, "80")
-	if err != nil {
-		return appendInternalErr(err)
-	}
+	    // Get the sketch server port from the container
+    localAddr, err := getContainerPort(ctx, cntrName, "80")
+    if err != nil {
+        return appendInternalErr(err)
+    }
 
-	if config.Verbose {
-		fmt.Fprintf(os.Stderr, "Host web server: http://%s/\n", localAddr)
-	}
+    if config.Verbose {
+        fmt.Fprintf(os.Stderr, "Host web server: http://%s/\n", localAddr)
+    }
 
-	localSSHAddr, err := getContainerPort(ctx, cntrName, "22")
-	if err != nil {
-		return appendInternalErr(err)
-	}
-	sshHost, sshPort, err := net.SplitHostPort(localSSHAddr)
-	if err != nil {
-		return appendInternalErr(fmt.Errorf("failed to split ssh host and port: %w", err))
-	}
+    localSSHAddr, err := getContainerPort(ctx, cntrName, "22")
+    if err != nil {
+        return appendInternalErr(err)
+    }
+    sshHost, sshPort, err := net.SplitHostPort(localSSHAddr)
+    if err != nil {
+        return appendInternalErr(fmt.Errorf("failed to split ssh host and port: %w", err))
+    }
+
 
 	var sshServerIdentity, sshUserIdentity, containerCAPublicKey, hostCertificate []byte
 
@@ -545,6 +546,7 @@ func createDockerContainer(ctx context.Context, cntrName, hostPort, relPath, img
 	} else {
 		cmdArgs = append(cmdArgs, "-p", "0:22") // use an ephemeral host port for ssh.
 	}
+
 	if relPath != "." {
 		cmdArgs = append(cmdArgs, "-w", "/app/"+relPath)
 	}
