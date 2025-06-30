@@ -132,6 +132,9 @@ type CodingAgent interface {
 	OutsideWorkingDir() string
 	GitOrigin() string
 
+	// GitUsername returns the git user name from the agent config.
+	GitUsername() string
+
 	// DiffStats returns the number of lines added and removed from sketch-base to HEAD
 	DiffStats() (int, int)
 	// OpenBrowser is a best-effort attempt to open a browser at url in outside sketch.
@@ -723,6 +726,11 @@ func (a *Agent) GitOrigin() string {
 	return a.gitOrigin
 }
 
+// GitUsername returns the git user name from the agent config.
+func (a *Agent) GitUsername() string {
+	return a.config.GitUsername
+}
+
 // DiffStats returns the number of lines added and removed from sketch-base to HEAD
 func (a *Agent) DiffStats() (int, int) {
 	return a.gitState.DiffStats()
@@ -1273,16 +1281,24 @@ func (a *Agent) initConvoWithUsage(usage *conversation.CumulativeUsage) *convers
 
 	convo.Tools = append(convo.Tools, browserTools...)
 
-	// Add session history tools if skaband client is available
-	if a.config.SkabandClient != nil {
-		sessionHistoryTools := claudetool.CreateSessionHistoryTools(a.config.SkabandClient, a.config.SessionID, a.gitOrigin)
-		convo.Tools = append(convo.Tools, sessionHistoryTools...)
-	}
-
 	// Add MCP tools if configured
 	if len(a.config.MCPServers) > 0 {
+
 		slog.InfoContext(ctx, "Initializing MCP connections", "servers", len(a.config.MCPServers))
-		mcpConnections, mcpErrors := a.mcpManager.ConnectToServers(ctx, a.config.MCPServers, 10*time.Second)
+		serverConfigs, parseErrors := mcp.ParseServerConfigs(ctx, a.config.MCPServers)
+
+		// Replace any headers with value _sketch_public_key_ and _sketch_session_id_ with those values.
+		for i := range serverConfigs {
+			if serverConfigs[i].Headers != nil {
+				for key, value := range serverConfigs[i].Headers {
+					// Replace _sketch_public_key_ placeholder
+					if value == "_sketch_public_key_" {
+						serverConfigs[i].Headers[key] = os.Getenv("SKETCH_PUB_KEY")
+					}
+				}
+			}
+		}
+		mcpConnections, mcpErrors := a.mcpManager.ConnectToServerConfigs(ctx, serverConfigs, 10*time.Second, parseErrors)
 
 		if len(mcpErrors) > 0 {
 			for _, err := range mcpErrors {

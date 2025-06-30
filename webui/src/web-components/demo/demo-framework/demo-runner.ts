@@ -94,9 +94,14 @@ export class DemoRunner {
     // For now, we'll maintain a registry of known demo components
     // This could be improved with build-time generation
     const knownComponents = [
+      "chat-input",
+      "sketch-app-shell",
+      "sketch-call-status",
       "sketch-chat-input",
       "sketch-container-status",
+      "sketch-timeline",
       "sketch-tool-calls",
+      "sketch-view-mode-select",
     ];
 
     // Filter to only components that actually have demo files

@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -23,10 +24,10 @@ import (
 	"sketch.dev/llm"
 	"sketch.dev/llm/gem"
 	"sketch.dev/llm/oai"
+	"sketch.dev/mcp"
 
 	"sketch.dev/browser"
 	"sketch.dev/dockerimg"
-	"sketch.dev/httprr"
 	"sketch.dev/llm/ant"
 	"sketch.dev/llm/conversation"
 	"sketch.dev/loop"
@@ -379,6 +380,7 @@ func runInHostMode(ctx context.Context, flags CLIFlags) error {
 		if err != nil {
 			return err
 		}
+		flags.mcpServers = append(flags.mcpServers, skabandMcpConfiguration(flags))
 	} else {
 		// When not using skaband, get API key from environment or flag
 		envName := "ANTHROPIC_API_KEY"
@@ -443,6 +445,27 @@ func runInHostMode(ctx context.Context, flags CLIFlags) error {
 	return nil
 }
 
+func skabandMcpConfiguration(flags CLIFlags) string {
+	skabandaddr, err := skabandclient.LocalhostToDockerInternal(flags.skabandAddr)
+	if err != nil {
+		skabandaddr = flags.skabandAddr
+	}
+	config := mcp.ServerConfig{
+		Name: "sketchdev",
+		Type: "http",
+		URL:  skabandaddr + "/api/mcp",
+		Headers: map[string]string{
+			"Session-Id": flags.sessionID,
+			"Public-Key": "_sketch_public_key_",
+		},
+	}
+	out, err := json.Marshal(&config)
+	if err != nil {
+		panic("programming error" + err.Error())
+	}
+	return string(out)
+}
+
 // runInContainerMode handles execution inside the Docker container.
 // The inInsideSketch parameter indicates whether we're inside the sketch container
 // with access to outside environment variables.
@@ -483,6 +506,9 @@ func runInUnsafeMode(ctx context.Context, flags CLIFlags, logFile *os.File) erro
 		if err != nil {
 			return err
 		}
+
+		// Add MCP Server for skaband
+		flags.mcpServers = append(flags.mcpServers, skabandMcpConfiguration(flags))
 	}
 
 	return setupAndRunAgent(ctx, flags, antURL, apiKey, pubKey, false, logFile)
@@ -491,26 +517,12 @@ func runInUnsafeMode(ctx context.Context, flags CLIFlags, logFile *os.File) erro
 // setupAndRunAgent handles the common logic for setting up and running the agent
 // in both container and unsafe modes.
 func setupAndRunAgent(ctx context.Context, flags CLIFlags, modelURL, apiKey, pubKey string, inInsideSketch bool, logFile *os.File) error {
-	// Configure HTTP client with optional recording
 	var client *http.Client
-	if flags.httprrFile != "" {
-		var err error
-		var rr *httprr.RecordReplay
-		if flags.record {
-			rr, err = httprr.OpenForRecording(flags.httprrFile, http.DefaultTransport)
-		} else {
-			rr, err = httprr.Open(flags.httprrFile, http.DefaultTransport)
-		}
-		if err != nil {
-			return fmt.Errorf("httprr: %v", err)
-		}
-		// Scrub API keys from requests for security
-		rr.ScrubReq(func(req *http.Request) error {
-			req.Header.Del("x-api-key")
-			req.Header.Del("anthropic-api-key")
-			return nil
-		})
-		client = rr.Client()
+
+	// Set the public key environment variable if provided
+	// This is needed for MCP server authentication placeholder replacement
+	if pubKey != "" {
+		os.Setenv("SKETCH_PUB_KEY", pubKey)
 	}
 
 	wd, err := os.Getwd()

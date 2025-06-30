@@ -72,6 +72,9 @@ export class SketchTimelineMessage extends LitElement {
   @property()
   firstMessageIndex: number = 0;
 
+  @property({ type: Boolean, reflect: true, attribute: "compactpadding" })
+  compactPadding: boolean = false;
+
   @state()
   showInfo: boolean = false;
 
@@ -118,6 +121,15 @@ export class SketchTimelineMessage extends LitElement {
       max-width: calc(100% - 160px);
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    :host([compactpadding]) .message-bubble-container {
+      max-width: 100%;
+    }
+
+    :host([compactpadding]) .message-metadata-left,
+    :host([compactpadding]) .message-metadata-right {
+      display: none;
     }
 
     .user .message-bubble-container {
@@ -657,6 +669,25 @@ export class SketchTimelineMessage extends LitElement {
       font-size: 12px;
       transition: all 0.2s ease;
       border-left: 2px solid rgba(0, 0, 0, 0.1);
+    }
+
+    /* User name styling - positioned outside and below the message bubble */
+    .user-name-container {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+      padding-right: 80px; /* Account for right metadata area */
+    }
+
+    :host([compactpadding]) .user-name-container {
+      padding-right: 0; /* No right padding in compact mode */
+    }
+
+    .user-name {
+      font-size: 11px;
+      color: #666;
+      font-style: italic;
+      text-align: right;
     }
 
     .user .message-info-panel {
@@ -1561,6 +1592,15 @@ export class SketchTimelineMessage extends LitElement {
           <!-- Right side (empty for consistency) -->
           <div class="message-metadata-right"></div>
         </div>
+
+        <!-- User name for user messages - positioned outside and below the bubble -->
+        ${this.message?.type === "user" && this.state?.git_username
+          ? html`
+              <div class="user-name-container">
+                <div class="user-name">${this.state.git_username}</div>
+              </div>
+            `
+          : ""}
       </div>
     `;
   }
