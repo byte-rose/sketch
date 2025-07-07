@@ -3,6 +3,7 @@ FROM docker.io/chromedp/headless-shell:stable AS chrome
 
 # Stage 2: Main application image
 FROM kalilinux/kali-rolling
+FROM kalilinux/kali-rolling
 
 # Switch from dash to bash by default.
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
@@ -31,6 +32,7 @@ RUN apt-get update; \
 		libglib2.0-0 libnss3 libx11-6 libxcomposite1 libxdamage1 \
 		libxext6 libxi6 libxrandr2 libgbm1 libgtk-3-0 \
 		fonts-noto-color-emoji fonts-symbola \
+		nmap metasploit-framework john hydra sqlmap aircrack-ng \
 		nmap metasploit-framework john hydra sqlmap aircrack-ng \
 		nmap metasploit-framework john hydra sqlmap aircrack-ng && \
 	fc-cache -f -v && \
