@@ -808,17 +808,7 @@ func findOrBuildDockerImage(ctx context.Context, gitRoot, baseImage string, forc
 	cacheKey := createCacheKey(baseImageID, gitRoot)
 	imgName = "sketch-" + cacheKey
 
-	// Check if the cached image exists and is up to date
-	if !forceRebuild {
-		if exists, err := dockerImageExists(ctx, imgName); err != nil {
-			return "", fmt.Errorf("failed to check if image exists: %w", err)
-		} else if exists {
-			if verbose {
-				fmt.Printf("using cached image %s\n", imgName)
-			}
-			return imgName, nil
-		}
-	}
+	// SKIPPED: Force local build by removing pre-existing image check.
 
 	// Build the layered image
 	if err := buildLayeredImage(ctx, imgName, baseImage, gitRoot, verbose); err != nil {

@@ -18,6 +18,7 @@ import "./sketch-terminal";
 import "./sketch-timeline";
 import "./sketch-view-mode-select";
 import "./sketch-todo-panel";
+import "./sketch-landing-page";
 
 import { createRef, ref } from "lit/directives/ref.js";
 import { SketchChatInput } from "./sketch-chat-input";
@@ -140,6 +141,9 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
 
   // Mutation observer to detect when new messages are added
   private mutationObserver: MutationObserver | null = null;
+
+  @state()
+  private _showLandingPage: boolean = true;
 
   constructor() {
     super();
@@ -781,6 +785,9 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
         this.toggleViewMode("chat", true);
       }
 
+      // Hide landing page after first user message
+      this._showLandingPage = false;
+
       // Send the message to the server
       const response = await fetch("chat", {
         method: "POST",
@@ -995,6 +1002,9 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
   }
 
   protected renderMainViews() {
+    if (this._showLandingPage) {
+      return html`<sketch-landing-page></sketch-landing-page>`;
+    }
     return html`
       <!-- Chat View -->
       <div
