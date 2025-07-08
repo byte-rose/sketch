@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { html } from "lit";
-import { property, state } from "lit/decorators.js";
+import { css, html, LitElement } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
 import { ConnectionStatus, DataManager } from "../data";
-import { AgentMessage, State, Usage } from "../types";
+import { AgentMessage, GitLogEntry, State } from "../types";
 import { aggregateAgentMessages } from "./aggregateAgentMessages";
 import { SketchTailwindElement } from "./sketch-tailwind-element";
 
@@ -20,7 +19,7 @@ import "./sketch-timeline";
 import "./sketch-view-mode-select";
 import "./sketch-todo-panel";
 
-import { createRef } from "lit/directives/ref.js";
+import { createRef, ref } from "lit/directives/ref.js";
 import { SketchChatInput } from "./sketch-chat-input";
 
 type ViewMode = "chat" | "diff2" | "terminal";
@@ -37,8 +36,6 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
 
   // Last commit information
   @state()
-  @state()
-  latestUsage: Usage | null = null;
 
   // Reference to the container status element
   containerStatusElement: any = null;
@@ -325,7 +322,12 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
     }
   }
 
-  private _handleDiffComment(_event: CustomEvent) {
+  private _handleMultipleChoice(event: CustomEvent) {
+    window.console.log("_handleMultipleChoice", event);
+    this._sendChat;
+  }
+
+  private _handleDiffComment(event: CustomEvent) {
     // Empty stub required by the event binding in the template
     // Actual handling occurs at global level in sketch-chat-input component
   }
@@ -565,7 +567,7 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
       try {
         const todoData = JSON.parse(latestTodoContent);
         hasTodos = todoData.items && todoData.items.length > 0;
-      } catch {
+      } catch (error) {
         // Invalid JSON, treat as no todos
         hasTodos = false;
       }
@@ -644,11 +646,6 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
           this.showEndOfTurnNotification(message);
           break; // Only show one notification per batch of messages
         }
-      }
-      const msgsWithUsage = newMessages.filter((msg) => msg.usage);
-      if (msgsWithUsage.length > 0) {
-        this.latestUsage =
-          msgsWithUsage[msgsWithUsage.length - 1]?.usage || null;
       }
     }
 
@@ -885,7 +882,6 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
 
         <!-- Container status info moved above tabs -->
         <sketch-container-status
-          .latestUsage=${this.latestUsage}
           .state=${this.containerState}
           id="container-status"
         ></sketch-container-status>
@@ -1105,6 +1101,12 @@ export abstract class SketchAppShellBase extends SketchTailwindElement {
         console.error("Error cancelling operation:", error);
       }
     });
+
+    // Setup end button
+    const endButton = this.renderRoot?.querySelector(
+      "#endButton",
+    ) as HTMLButtonElement;
+    // We're already using the @click binding in the HTML, so manual event listener not needed here
 
     // Process any existing messages to find commit information
     if (this.messages && this.messages.length > 0) {
